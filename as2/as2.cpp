@@ -174,17 +174,17 @@ void draw_object()
 
 }
 
-void change_latitude()
+void change_latitude(int y_change)
 {
 
 }
 
-void change_longitude()
+void change_longitude(int x_change)
 {
 
 }
 
-void change_zoom()
+void change_zoom(int y_change)
 {
 
 }
@@ -341,13 +341,13 @@ void mouseMotion(int x, int y)
 
 	if (LEFT_MOUSE_DOWN)
 	{
-		change_longitude(x);
-		change_latitude(y);
+		change_longitude(x_change);
+		change_latitude(y_change);
 	}
 
 	if (RIGHT_MOUSE_DOWN)
 	{
-		change_zoom(x);
+		change_zoom(y_change);
 	}
 	printf("Mouse is at %d, %d\n", x,y);
 }
@@ -373,7 +373,7 @@ void keyboard(unsigned char key, int x, int y)
 	printf("Key pressed %c\r\n", key);
 
     switch(key) {
-    case 'q':
+    case 'q':
 	case 'Q':
 		exit(1);
 		break;
