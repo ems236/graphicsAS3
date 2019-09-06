@@ -8,10 +8,12 @@
 
 #define ON 1
 #define OFF 0
-
+#define PI 3.14159265
 
 // Global variables
 int window_width, window_height;    // Window dimensions
+
+//Current scene settings
 int PERSPECTIVE = OFF;
 int SHOW_AXES = ON;
 int SHOW_OBJECT = ON;
@@ -19,6 +21,13 @@ int LEFT_MOUSE_DOWN = OFF;
 int RIGHT_MOUSE_DOWN = OFF;
 int MOUSE_LAST_X = NULL;
 int MOUSE_LAST_Y = NULL;
+
+//current camera settings
+float camera_radius = 5.0;
+//phi
+float camera_latitude = PI / 2;
+//theta
+float camera_longitude = 0.0;
 
 // Vertex and Face data structure sued in the mesh reader
 // Feel free to change them
@@ -174,19 +183,67 @@ void draw_object()
 
 }
 
+float max(float a, float b)
+{
+	if (a > b)
+	{
+		return a;
+	}
+	else
+	{
+		return b;
+	}
+}
+
+float clamp(float min, float max, float value)
+{
+	if (value < min)
+	{
+		return min;
+	}
+	if (value > max)
+	{
+		return max;
+	}
+
+	return value;
+}
+
 void change_latitude(int y_change)
 {
-
+	//modify phi
+	camera_latitude = clamp(0, PI, (0.05 * y_change) + camera_latitude);
 }
 
 void change_longitude(int x_change)
 {
-
+	//modify theta
+	camera_longitude = fmod((0.25 * x_change) + camera_longitude, 2 * PI);
 }
 
 void change_zoom(int y_change)
 {
+	//modify r
+	camera_radius = max(0, (0.25 * y_change) + camera_radius);
+}
 
+point* camera_position()
+{
+	//Calc position around origin
+	/*
+	theta [0, 2pi] || [0, 360]
+	phi [0, pi] || [0, 180]
+	x = rcos(theta)sin(phi)
+	y = rsin(theta)sin(phi)
+	z = rcos(phi)
+	*/
+	point* camerapos = (point*)malloc(sizeof(point));
+
+	camerapos->x = camera_radius * sinf(camera_latitude) * cosf(camera_longitude);
+	camerapos->y = camera_radius * sinf(camera_latitude) * sinf(camera_longitude);
+	camerapos->z = camera_radius * cosf(camera_latitude);
+
+	return camerapos;
 }
 
 // The display function. It is called whenever the window needs
@@ -197,26 +254,24 @@ void display(void)
     // Clear the background
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
    
+
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+
 	if (PERSPECTIVE) {
 		// Perpective Projection 
-		glMatrixMode(GL_PROJECTION);
-		glLoadIdentity();
 		gluPerspective(60, (GLdouble)window_width / window_height, 0.01, 10000);
-		glutSetWindowTitle("Assignment 2 Template (perspective)");
-		glMatrixMode(GL_MODELVIEW);
-		glLoadIdentity();
-		// Set the camera position, orientation and target
-		gluLookAt(0, 0, 5, 0, 0, 0, 0, 1, 0);
 	}
 	else {
 		// Orthogonal Projection 
-		glMatrixMode(GL_PROJECTION);
-		glLoadIdentity();
 		glOrtho(-2.5, 2.5, -2.5, 2.5, -10000, 10000);
-		glutSetWindowTitle("Assignment 2 Template (orthogonal)");
-		glMatrixMode(GL_MODELVIEW);
-		glLoadIdentity();
 	}
+
+	glutSetWindowTitle("Assignment 2 Template (orthogonal)");
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	// Set the camera position, orientation and target
+	gluLookAt(0, 0, camera_radius, 0, 0, 0, 0, 1, 0);
 
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
