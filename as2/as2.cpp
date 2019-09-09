@@ -212,13 +212,13 @@ float clamp(float min, float max, float value)
 void change_latitude(int y_change)
 {
 	//modify phi
-	camera_latitude = clamp(0, PI, (0.05 * y_change) + camera_latitude);
+	camera_latitude = clamp(0, PI, (0.005 * y_change) + camera_latitude);
 }
 
 void change_longitude(int x_change)
 {
 	//modify theta
-	camera_longitude = fmod((0.25 * x_change) + camera_longitude, 2 * PI);
+	camera_longitude = fmod((0.005 * x_change) + camera_longitude, 2 * PI);
 }
 
 void change_zoom(int y_change)
@@ -238,7 +238,8 @@ point* camera_position()
 	z = rcos(phi)
 	*/
 	point* camerapos = (point*)malloc(sizeof(point));
-
+	float testsin = sinf(camera_latitude);
+	float testcos = cosf(camera_latitude);
 	camerapos->x = camera_radius * sinf(camera_latitude) * cosf(camera_longitude);
 	camerapos->y = camera_radius * sinf(camera_latitude) * sinf(camera_longitude);
 	camerapos->z = camera_radius * cosf(camera_latitude);
@@ -270,9 +271,12 @@ void display(void)
 	glutSetWindowTitle("Assignment 2 Template (orthogonal)");
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
-	// Set the camera position, orientation and target
-	gluLookAt(0, 0, camera_radius, 0, 0, 0, 0, 1, 0);
 
+	point* pos = camera_position();
+	printf("camera angles (%f %f %f) camera position (%f %f %f)", camera_latitude, camera_longitude, camera_radius, pos->x, pos->y, pos->z);
+	// Set the camera position, orientation and target
+	gluLookAt(pos->x, pos->y, pos->z, 0, 0, 0, 0, 1, 0);
+	free(pos);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // Draw a red rectangle
@@ -362,6 +366,12 @@ int* getFlagByMouseType(int mouseType)
 	}
 }
 
+void set_mouse_pos(int x, int y)
+{
+	MOUSE_LAST_X = x;
+	MOUSE_LAST_Y = y;
+}
+
 // This function is called whenever the mouse is pressed or released
 // button is a number 0 to 2 designating the button
 // state is 1 for release 0 for press event
@@ -371,6 +381,8 @@ void mouseButton(int button,int state,int x,int y)
 	const int DOWN = 0;
 	const int UP = 1;
 	
+	set_mouse_pos(x, y);
+
 	int is_mouse_down = ON;
 	if (state == UP)
 	{
@@ -394,15 +406,19 @@ void mouseMotion(int x, int y)
 	int x_change = x - MOUSE_LAST_X;
 	int y_change = y - MOUSE_LAST_Y;
 
+	set_mouse_pos(x, y);
+
 	if (LEFT_MOUSE_DOWN)
 	{
 		change_longitude(x_change);
 		change_latitude(y_change);
+		glutPostRedisplay();
 	}
 
 	if (RIGHT_MOUSE_DOWN)
 	{
 		change_zoom(y_change);
+		glutPostRedisplay();
 	}
 	printf("Mouse is at %d, %d\n", x,y);
 }
