@@ -16,11 +16,12 @@ int window_width, window_height;    // Window dimensions
 //Current scene settings
 int PERSPECTIVE = OFF;
 int SHOW_AXES = ON;
-int SHOW_OBJECT = ON;
+int SHOW_OBJECT = OFF;
 int LEFT_MOUSE_DOWN = OFF;
 int RIGHT_MOUSE_DOWN = OFF;
 int MOUSE_LAST_X = NULL;
 int MOUSE_LAST_Y = NULL;
+int OBJECT_HAS_LOADED = OFF;
 
 //current camera settings
 float camera_radius = 5.0;
@@ -178,9 +179,29 @@ void draw_axes()
 	glEnd();
 }
 
+void draw_vertex(point* v)
+{
+	glVertex3f(v->x, v->y, v->z);
+}
+
 void draw_object()
 {
+	if (!OBJECT_HAS_LOADED)
+	{
+		meshReader("teapot.obj", 1);
+		OBJECT_HAS_LOADED = ON;
+	}
 
+	glColor3f(1, 1, 1);
+
+	glBegin(GL_TRIANGLES);
+		for(int i = 0; i < faces; i++)
+		{
+			draw_vertex(&vertList[faceList[i].v1]);
+			draw_vertex(&vertList[faceList[i].v2]);
+			draw_vertex(&vertList[faceList[i].v3]);
+		}
+	glEnd();
 }
 
 float max(float a, float b)
@@ -211,20 +232,28 @@ float clamp(float min, float max, float value)
 
 void change_latitude(int y_change)
 {
+	//Poles misbehaving with 0 or PI as latitude
+	const float tolerance = 0.00001;
 	//modify phi
-	camera_latitude = clamp(0, PI, (0.005 * y_change) + camera_latitude);
+	camera_latitude = clamp(tolerance, PI - tolerance, (0.005 * y_change) + camera_latitude);
 }
 
 void change_longitude(int x_change)
 {
 	//modify theta
 	camera_longitude = fmod((0.005 * x_change) + camera_longitude, 2 * PI);
+
+	//Should be fine but avoid negative longitudes
+	if (camera_longitude < 0)
+	{
+		camera_longitude = 2 * PI + camera_longitude;
+	}
 }
 
 void change_zoom(int y_change)
 {
 	//modify r
-	camera_radius = max(0, (0.25 * y_change) + camera_radius);
+	camera_radius = max(0.01, (0.25 * y_change) + camera_radius);
 }
 
 point* camera_position()
@@ -273,9 +302,9 @@ void display(void)
 	glLoadIdentity();
 
 	point* pos = camera_position();
-	printf("camera angles (%f %f %f) camera position (%f %f %f)", camera_latitude, camera_longitude, camera_radius, pos->x, pos->y, pos->z);
+	printf("camera theta phi r (%f %f %f) camera x y z (%f %f %f)\r\n", camera_latitude, camera_longitude, camera_radius, pos->x, pos->y, pos->z);
 	// Set the camera position, orientation and target
-	gluLookAt(pos->x, pos->y, pos->z, 0, 0, 0, 0, 1, 0);
+	gluLookAt(pos->x, pos->y, pos->z, 0, 0, 0, 0, 0, 1);
 	free(pos);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
@@ -403,8 +432,8 @@ void mouseButton(int button,int state,int x,int y)
 // x and y are the location of the mouse (in window-relative coordinates)
 void mouseMotion(int x, int y)
 {
-	int x_change = x - MOUSE_LAST_X;
-	int y_change = y - MOUSE_LAST_Y;
+	int x_change = -x + MOUSE_LAST_X;
+	int y_change = -y + MOUSE_LAST_Y;
 
 	set_mouse_pos(x, y);
 
@@ -420,7 +449,7 @@ void mouseMotion(int x, int y)
 		change_zoom(y_change);
 		glutPostRedisplay();
 	}
-	printf("Mouse is at %d, %d\n", x,y);
+	//printf("Mouse is at %d, %d\n", x,y);
 }
 
 

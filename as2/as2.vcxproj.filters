@@ -22,4 +22,11 @@
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Object Include="b_rogers.obj" />
+    <Object Include="gallbladder_s.obj" />
+    <Object Include="helicopter.obj" />
+    <Object Include="sphere.obj" />
+    <Object Include="teapot.obj" />
+  </ItemGroup>
 </Project>
