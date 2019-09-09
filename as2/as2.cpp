@@ -308,6 +308,7 @@ void display(void)
 	free(pos);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+	/*
     // Draw a red rectangle
     glColor3f(1,0,0);
 	glBegin(GL_POLYGON);
@@ -336,7 +337,7 @@ void display(void)
 		glVertex3f(0.8,-0.4,0.8);
 		glVertex3f(0.0,-0.4,-0.8);
     glEnd();
-
+	*/
 	if (SHOW_AXES)
 	{
 		draw_axes();
