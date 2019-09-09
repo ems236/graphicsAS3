@@ -23,10 +23,10 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <Object Include="b_rogers.obj" />
-    <Object Include="gallbladder_s.obj" />
-    <Object Include="helicopter.obj" />
-    <Object Include="sphere.obj" />
-    <Object Include="teapot.obj" />
+    <CopyFileToFolders Include="helicopter.obj" />
+    <CopyFileToFolders Include="gallbladder_s.obj" />
+    <CopyFileToFolders Include="b_rogers.obj" />
+    <CopyFileToFolders Include="sphere.obj" />
+    <CopyFileToFolders Include="teapot.obj" />
   </ItemGroup>
 </Project>

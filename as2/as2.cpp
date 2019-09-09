@@ -263,15 +263,15 @@ point* camera_position()
 	theta [0, 2pi] || [0, 360]
 	phi [0, pi] || [0, 180]
 	x = rcos(theta)sin(phi)
-	y = rsin(theta)sin(phi)
-	z = rcos(phi)
+	y = rcos(phi)
+	z = rsin(theta)sin(phi)
 	*/
 	point* camerapos = (point*)malloc(sizeof(point));
 	float testsin = sinf(camera_latitude);
 	float testcos = cosf(camera_latitude);
 	camerapos->x = camera_radius * sinf(camera_latitude) * cosf(camera_longitude);
-	camerapos->y = camera_radius * sinf(camera_latitude) * sinf(camera_longitude);
-	camerapos->z = camera_radius * cosf(camera_latitude);
+	camerapos->y = camera_radius * cosf(camera_latitude);
+	camerapos->z = camera_radius* sinf(camera_latitude)* sinf(camera_longitude);
 
 	return camerapos;
 }
@@ -297,14 +297,14 @@ void display(void)
 		glOrtho(-2.5, 2.5, -2.5, 2.5, -10000, 10000);
 	}
 
-	glutSetWindowTitle("Assignment 2 Template (orthogonal)");
+	glutSetWindowTitle("ems236 assignment 2");
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 
 	point* pos = camera_position();
 	printf("camera theta phi r (%f %f %f) camera x y z (%f %f %f)\r\n", camera_latitude, camera_longitude, camera_radius, pos->x, pos->y, pos->z);
 	// Set the camera position, orientation and target
-	gluLookAt(pos->x, pos->y, pos->z, 0, 0, 0, 0, 0, 1);
+	gluLookAt(pos->x, pos->y, pos->z, 0, 0, 0, 0, 1, 0);
 	free(pos);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
