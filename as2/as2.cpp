@@ -1,5 +1,4 @@
-// The template code for Assignment 2 
-//
+//ems236 Assignment 2
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -30,7 +29,7 @@ float camera_latitude = PI / 2;
 //theta
 float camera_longitude = 0.0;
 
-// Vertex and Face data structure sued in the mesh reader
+// Vertex and Face data structure used in the mesh reader
 // Feel free to change them
 typedef struct _point {
   float x,y,z;
@@ -165,17 +164,17 @@ void draw_axes()
 		//x
 		glColor3f(1, 0, 0);
 		glVertex3f(0.0, 0.0, 0.0);
-		glVertex3f(50.0, 0.0, 0.0);
+		glVertex3f(5.0, 0.0, 0.0);
 
 		//y
 		glColor3f(0, 1, 0);
 		glVertex3f(0.0, 0.0, 0.0);
-		glVertex3f(0.0, 50.0, 0.0);
+		glVertex3f(0.0, 5.0, 0.0);
 
 		//z
 		glColor3f(0, 0, 1);
 		glVertex3f(0.0, 0.0, 0.0);
-		glVertex3f(0.0, 0.0, 50.0);
+		glVertex3f(0.0, 0.0, 5.0);
 	glEnd();
 }
 
@@ -288,16 +287,19 @@ void display(void)
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 
+	char* projection_type_description;
+
 	if (PERSPECTIVE) {
 		// Perpective Projection 
 		gluPerspective(60, (GLdouble)window_width / window_height, 0.01, 10000);
+		glutSetWindowTitle("ems236 assignment 2 Perspective Mode");
 	}
 	else {
 		// Orthogonal Projection 
 		glOrtho(-2.5, 2.5, -2.5, 2.5, -10000, 10000);
+		glutSetWindowTitle("ems236 assignment 2 Orthographic Mode");
 	}
-
-	glutSetWindowTitle("ems236 assignment 2");
+	
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 
@@ -308,36 +310,6 @@ void display(void)
 	free(pos);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
-	/*
-    // Draw a red rectangle
-    glColor3f(1,0,0);
-	glBegin(GL_POLYGON);
-		glVertex3f(0.8,0.8,-0.8);
-		glVertex3f(0.8,-0.8,-0.8);
-		glVertex3f(-0.8,-0.8,-0.0);
-		glVertex3f(-0.8,0.8,-0.0);
-    glEnd();
-
-    // Draw a blue tetraheadron
-    glColor3f(0,0,1);
-    glBegin(GL_TRIANGLES);
-		glVertex3f(0.0,1.6,0.0);
-		glVertex3f(0.8,-0.4,0.8);
-		glVertex3f(-0.8,-0.4,0.8);
-
-		glVertex3f(0.0,1.6,0.0);
-		glVertex3f(0.8,-0.4,0.8);
-		glVertex3f(0.0,-0.4,-0.8);
-
-		glVertex3f(0.0,1.6,0.0);
-		glVertex3f(0.0,-0.4,-0.8);
-		glVertex3f(-0.8,-0.4,0.8);
-
-		glVertex3f(-0.8,-0.4,0.8);
-		glVertex3f(0.8,-0.4,0.8);
-		glVertex3f(0.0,-0.4,-0.8);
-    glEnd();
-	*/
 	if (SHOW_AXES)
 	{
 		draw_axes();
