@@ -7,6 +7,7 @@
 #include <GL\glut.h>
 #include <math.h>
 #include <vector>
+#include <iostream>
 
 #define ON 1
 #define OFF 0
@@ -34,6 +35,10 @@ int OBJECT_HAS_LOADED = OFF;
 Coordinate camera_position;
 Coordinate look_at;
 Coordinate up_vector;
+
+//use these when swinging lookat around
+double current_theta = 0;
+double current_phi = 0;
 
 //Local transforms
 Matrix model_rotation;
@@ -225,9 +230,16 @@ Matrix current_viewing_transform()
 void update_state()
 {
 	Matrix scale_matrix = Matrix::scale(scale);
+	Matrix model_to_world = world_rotation * model_translation * model_rotation * scale_matrix;
 	Matrix current_viewing = current_viewing_transform();
 	model_to_view = current_viewing * world_rotation * model_translation * model_rotation * scale_matrix;
 	world_to_view = current_viewing * scale_matrix;
+
+	cout << "Model -> world transforms\r\n";
+	model_to_world.print();
+	cout << "World -> view transforms\r\n";
+	world_to_view.print();
+
 
 	glutPostRedisplay();
 }
@@ -323,9 +335,9 @@ void display(void)
 	if (SHOW_AXES)
 	{
 		Coordinate zero = Coordinate::point3(0, 0, 0);
-		Coordinate x = Coordinate::point3(1, 0, 0);
-		Coordinate y = Coordinate::point3(0, 1, 0);
-		Coordinate z = Coordinate::point3(0, 0, 1);
+		Coordinate x = Coordinate::point3(50, 0, 0);
+		Coordinate y = Coordinate::point3(0, 50, 0);
+		Coordinate z = Coordinate::point3(0, 0, 50);
 
 		draw_axes(transform_point(zero), transform_point(x), transform_point(y), transform_point(z));
 		draw_axes(transform_world_point(zero), transform_world_point(x), transform_world_point(y), transform_world_point(z));
@@ -409,6 +421,24 @@ void mouseButton(int button,int state,int x,int y)
     printf("Mouse click at %d %d, button: %d, state %d\n",x,y,button,state);
 }
 
+
+//Move camera lookat.  Use spherical coordinates.
+void mouse_transform_lookat()
+{
+
+}
+
+//Move the camera position along the plane perpendicular to its z axis
+void mouse_slide_camera_xy()
+{
+
+}
+
+//Move camera along its z axis
+void mouse_slide_camera_z()
+{
+
+}
 
 //This function is called whenever the mouse is moved with a mouse button held down.
 // x and y are the location of the mouse (in window-relative coordinates)
@@ -556,22 +586,22 @@ void keyboard(unsigned char key, int x, int y)
 		break;
 	//rotation -,+ x,y,z
 	case '[':
-		rotate_local(Matrix::rotation_x(-1 * rotation_base_angle));
+		rotate_world(Matrix::rotation_x(-1 * rotation_base_angle));
 		break;
 	case ']':
-		rotate_local(Matrix::rotation_x(rotation_base_angle));
+		rotate_world(Matrix::rotation_x(rotation_base_angle));
 		break;
 	case ';':
-		rotate_local(Matrix::rotation_y(-1 * rotation_base_angle));
+		rotate_world(Matrix::rotation_y(-1 * rotation_base_angle));
 		break;
 	case '\'':
-		rotate_local(Matrix::rotation_y(rotation_base_angle));
+		rotate_world(Matrix::rotation_y(rotation_base_angle));
 		break;
 	case '.':
-		rotate_local(Matrix::rotation_z(-1 * rotation_base_angle));
+		rotate_world(Matrix::rotation_z(-1 * rotation_base_angle));
 		break;
 	case '/':
-		rotate_local(Matrix::rotation_z(rotation_base_angle));
+		rotate_world(Matrix::rotation_z(rotation_base_angle));
 		break;
 	//scaling +,-
 	case '=':
@@ -585,26 +615,26 @@ void keyboard(unsigned char key, int x, int y)
 	//rotation -,+ x,y,z
 	case 'i':
 	case 'I':
-		rotate_world(Matrix::rotation_x(-1 * rotation_base_angle));
+		rotate_local(Matrix::rotation_x(-1 * rotation_base_angle));
 		break;
 	case 'o':
 	case 'O':
-		rotate_world(Matrix::rotation_x(rotation_base_angle));
+		rotate_local(Matrix::rotation_x(rotation_base_angle));
 		break;
 	case 'k':
 	case 'K':
-		rotate_world(Matrix::rotation_y(-1 * rotation_base_angle));
+		rotate_local(Matrix::rotation_y(-1 * rotation_base_angle));
 		break;
 	case 'l':
 	case 'L':
-		rotate_world(Matrix::rotation_y(rotation_base_angle));
+		rotate_local(Matrix::rotation_y(rotation_base_angle));
 		break;
 	case 'm':
 	case 'M':
-		rotate_world(Matrix::rotation_z(-1 * rotation_base_angle));
+		rotate_local(Matrix::rotation_z(-1 * rotation_base_angle));
 		break;
 	case ',':
-		rotate_world(Matrix::rotation_z(rotation_base_angle));
+		rotate_local(Matrix::rotation_z(rotation_base_angle));
 		break;
 
 
