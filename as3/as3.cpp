@@ -1,13 +1,20 @@
-//ems236 Assignment 2
+//ems236 Assignment 3
 
+#include "Coordinate.h";
+#include "Matrix.h";
 #include <stdio.h>
 #include <stdlib.h>
 #include <GL\glut.h>
 #include <math.h>
+#include <vector>
 
 #define ON 1
 #define OFF 0
 #define PI 3.14159265
+
+const double rotation_base_angle = 0.3;
+const double translation_base = 0.5;
+const double scale_base = 0.2;
 
 // Global variables
 int window_width, window_height;    // Window dimensions
@@ -15,19 +22,26 @@ int window_width, window_height;    // Window dimensions
 //Current scene settings
 int PERSPECTIVE = OFF;
 int SHOW_AXES = ON;
-int SHOW_OBJECT = OFF;
+int NEXT_LOOKAT_IS_WORLD = ON;
 int LEFT_MOUSE_DOWN = OFF;
 int RIGHT_MOUSE_DOWN = OFF;
+int MIDDLE_MOUSE_DOWN = OFF;
 int MOUSE_LAST_X = NULL;
 int MOUSE_LAST_Y = NULL;
 int OBJECT_HAS_LOADED = OFF;
 
 //current camera settings
-float camera_radius = 5.0;
-//phi
-float camera_latitude = PI / 2;
-//theta
-float camera_longitude = 0.0;
+Coordinate camera_position;
+Coordinate look_at;
+Coordinate up_vector;
+
+//Local transforms
+Matrix model_rotation;
+double scale = 1;
+
+//world transforms
+Matrix model_translation;
+Matrix world_rotation;
 
 // Vertex and Face data structure used in the mesh reader
 // Feel free to change them
@@ -43,6 +57,7 @@ typedef struct _faceStruct {
 int verts, faces, norms;    // Number of vertices, faces and normals in the system
 point *vertList, *normList; // Vertex and Normal Lists
 faceStruct *faceList;	    // Face List
+
 
 // The mesh reader itself
 // It can read *very* simple obj files
@@ -158,29 +173,82 @@ void meshReader (char *filename,int sign)
 }
 
 
-void draw_axes()
+void draw_axes(Coordinate origin, Coordinate x, Coordinate y, Coordinate z)
 {
 	glBegin(GL_LINES);
 		//x
 		glColor3f(1, 0, 0);
-		glVertex3f(0.0, 0.0, 0.0);
-		glVertex3f(5.0, 0.0, 0.0);
+		glVertex3f(origin.x(), origin.y(), origin.z());
+		glVertex3f(x.x(), x.y(), x.z());
 
 		//y
 		glColor3f(0, 1, 0);
-		glVertex3f(0.0, 0.0, 0.0);
-		glVertex3f(0.0, 5.0, 0.0);
+		glVertex3f(origin.x(), origin.y(), origin.z());
+		glVertex3f(y.x(), y.y(), y.z());
 
 		//z
 		glColor3f(0, 0, 1);
-		glVertex3f(0.0, 0.0, 0.0);
-		glVertex3f(0.0, 0.0, 5.0);
+		glVertex3f(origin.x(), origin.y(), origin.z());
+		glVertex3f(z.x(), z.y(), z.z());
 	glEnd();
 }
 
-void draw_vertex(point* v)
+void draw_vertex(Coordinate& v)
 {
-	glVertex3f(v->x, v->y, v->z);
+	glVertex3f(v.x(), v.y(), v.z());
+}
+
+//Gives z axis. Camera looks down negative z axis
+Coordinate current_viewing_vector()
+{
+	return Coordinate::vector3(
+		camera_position.x() - look_at.x()
+		, camera_position.y() - look_at.y()
+		, camera_position.z() - look_at.z()
+	).normalized();
+}
+
+Matrix current_viewing_transform()
+{
+	Coordinate n = current_viewing_vector();
+
+	//& is cross product
+	Coordinate u = (up_vector & n).normalized();
+	Coordinate v = (n & u).normalized();
+
+	//get the inverse
+	Matrix Mvw = *new Matrix();
+	Mvw.add(Coordinate::vector3(u.x(), v.x(), n.x()));
+	Mvw.add(Coordinate::vector3(u.y(), v.y(), n.y()));
+	Mvw.add(Coordinate::vector3(u.z(), v.z(), n.z()));
+
+	//a temp to make multiplication work
+	Mvw.add(Coordinate::point3(0, 0, 0));
+
+	//multiply by -1 hardcoded because I don't want to make that operator
+	Coordinate camera_to_world_translation = Coordinate::vector3(-1 * camera_position.x(), -1 * camera_position.y(), -1 * camera_position.z());
+	Coordinate translation_inverse = Mvw * camera_to_world_translation;
+	translation_inverse.homogenize(true);
+
+	Mvw.data.pop_back();
+	Mvw.add(translation_inverse);
+
+	return Mvw;
+}
+
+Coordinate transform_point(point* point)
+{
+	Coordinate coord = Matrix::scale(scale) * Coordinate::point3(point->x, point->y, point->z);
+	Coordinate model_transformed = model_rotation * coord;
+	Coordinate world_space = world_rotation * (model_translation * coord);
+	
+	return current_viewing_transform() * world_space;
+}
+
+Coordinate transform_world_point(point* point)
+{
+	Coordinate coord = Matrix::scale(scale) * Coordinate::point3(point->x, point->y, point->z);
+	return current_viewing_transform() * coord;
 }
 
 void draw_object()
@@ -196,9 +264,9 @@ void draw_object()
 	glBegin(GL_TRIANGLES);
 		for(int i = 0; i < faces; i++)
 		{
-			draw_vertex(&vertList[faceList[i].v1]);
-			draw_vertex(&vertList[faceList[i].v2]);
-			draw_vertex(&vertList[faceList[i].v3]);
+			draw_vertex(transform_point(&vertList[faceList[i].v1]));
+			draw_vertex(transform_point(&vertList[faceList[i].v2]));
+			draw_vertex(transform_point(&vertList[faceList[i].v3]));
 		}
 	glEnd();
 }
@@ -229,52 +297,6 @@ float clamp(float min, float max, float value)
 	return value;
 }
 
-void change_latitude(int y_change)
-{
-	//Poles misbehaving with 0 or PI as latitude
-	const float tolerance = 0.00001;
-	//modify phi
-	camera_latitude = clamp(tolerance, PI - tolerance, (0.005 * y_change) + camera_latitude);
-}
-
-void change_longitude(int x_change)
-{
-	//modify theta
-	camera_longitude = fmod((0.005 * x_change) + camera_longitude, 2 * PI);
-
-	//Should be fine but avoid negative longitudes
-	if (camera_longitude < 0)
-	{
-		camera_longitude = 2 * PI + camera_longitude;
-	}
-}
-
-void change_zoom(int y_change)
-{
-	//modify r
-	camera_radius = max(0.01, (0.25 * y_change) + camera_radius);
-}
-
-point* camera_position()
-{
-	//Calc position around origin
-	/*
-	theta [0, 2pi] || [0, 360]
-	phi [0, pi] || [0, 180]
-	x = rcos(theta)sin(phi)
-	y = rcos(phi)
-	z = rsin(theta)sin(phi)
-	*/
-	point* camerapos = (point*)malloc(sizeof(point));
-	float testsin = sinf(camera_latitude);
-	float testcos = cosf(camera_latitude);
-	camerapos->x = camera_radius * sinf(camera_latitude) * cosf(camera_longitude);
-	camerapos->y = camera_radius * cosf(camera_latitude);
-	camerapos->z = camera_radius* sinf(camera_latitude)* sinf(camera_longitude);
-
-	return camerapos;
-}
-
 // The display function. It is called whenever the window needs
 // redrawing (ie: overlapping window moves, resize, maximize)
 // You should redraw your polygons here
@@ -283,7 +305,6 @@ void display(void)
     // Clear the background
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
    
-
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 
@@ -292,33 +313,24 @@ void display(void)
 	if (PERSPECTIVE) {
 		// Perpective Projection 
 		gluPerspective(60, (GLdouble)window_width / window_height, 0.01, 10000);
-		glutSetWindowTitle("ems236 assignment 2 Perspective Mode");
+		glutSetWindowTitle("ems236 assignment 3 Perspective Mode");
 	}
 	else {
 		// Orthogonal Projection 
 		glOrtho(-2.5, 2.5, -2.5, 2.5, -10000, 10000);
-		glutSetWindowTitle("ems236 assignment 2 Orthographic Mode");
+		glutSetWindowTitle("ems236 assignment 3 Orthographic Mode");
 	}
 	
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
-
-	point* pos = camera_position();
-	printf("camera theta phi r (%f %f %f) camera x y z (%f %f %f)\r\n", camera_latitude, camera_longitude, camera_radius, pos->x, pos->y, pos->z);
-	// Set the camera position, orientation and target
-	gluLookAt(pos->x, pos->y, pos->z, 0, 0, 0, 0, 1, 0);
-	free(pos);
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
 	if (SHOW_AXES)
 	{
-		draw_axes();
+		//draw_axes();
 	}
 
-	if (SHOW_OBJECT)
-	{
-		draw_object();
-	}
+	draw_object();
 
     // (Note that the origin is lower left corner)
     // (Note also that the window spans (0,1) )
@@ -344,21 +356,17 @@ void resize(int x,int y)
     printf("Resized to %d %d\n",x,y);
 }
 
-void check_reset_mouse_pos()
-{
-	if (LEFT_MOUSE_DOWN ^ RIGHT_MOUSE_DOWN)
-	{
-		MOUSE_LAST_X = NULL;
-		MOUSE_LAST_Y = NULL;
-	}
-}
-
 int* getFlagByMouseType(int mouseType)
 {
 	const int LEFT = 0;
+	const int MIDDLE = 1;
 	const int RIGHT = 2;
 
 	if (mouseType == LEFT)
+	{
+		return &LEFT_MOUSE_DOWN;
+	}
+	if (mouseType == MIDDLE)
 	{
 		return &LEFT_MOUSE_DOWN;
 	}
@@ -405,26 +413,31 @@ void mouseButton(int button,int state,int x,int y)
 // x and y are the location of the mouse (in window-relative coordinates)
 void mouseMotion(int x, int y)
 {
-	int x_change = -x + MOUSE_LAST_X;
-	int y_change = -y + MOUSE_LAST_Y;
+	int x_change = x + MOUSE_LAST_X;
+	int y_change = y + MOUSE_LAST_Y;
 
 	set_mouse_pos(x, y);
 
 	if (LEFT_MOUSE_DOWN)
 	{
-		change_longitude(x_change);
-		change_latitude(y_change);
+		//Change look at
+		glutPostRedisplay();
+	}
+
+	if (MIDDLE_MOUSE_DOWN)
+	{
+		//slide camera
 		glutPostRedisplay();
 	}
 
 	if (RIGHT_MOUSE_DOWN)
 	{
-		change_zoom(y_change);
+		//zoom
 		glutPostRedisplay();
 	}
 	//printf("Mouse is at %d, %d\n", x,y);
 }
-
+	
 
 void toggleFlag(int* flag)
 {
@@ -438,14 +451,160 @@ void toggleFlag(int* flag)
 	}
 }
 
+void rotate_local(Matrix new_rotation)
+{
+	//Local multiply on right
+	model_rotation = model_rotation * new_rotation;
+}
+
+void rotate_world(Matrix new_rotation)
+{
+	//world rotation multiply on left;
+	world_rotation = new_rotation * world_rotation;
+}
+
+void translate_object(Matrix new_translation)
+{
+	//multiply a new translation on left
+	model_translation = new_translation * model_translation;
+}
+
+void change_scale(int sign)
+{
+	scale = scale + scale_base * sign;
+}
+
+void set_camera_lookat()
+{
+	Coordinate zero = Coordinate::point3(0, 0, 0);
+	if (NEXT_LOOKAT_IS_WORLD)
+	{
+		look_at = zero;
+	}
+	else
+	{
+		look_at = model_translation * zero;
+	}
+
+	toggleFlag(&NEXT_LOOKAT_IS_WORLD);
+}
+
 // This function is called whenever there is a keyboard input
 // key is the ASCII value of the key pressed
 // x and y are the location of the mouse
+
+/*
+"4" : negative translation along x axis
+"6" : positive translation along x axis
+"8" : positive translation along y axis
+"2" : negative translation along y axis
+"9" : positive translation along z axis
+"1" : negative translation along z axis
+"[" : negative rotation around x axis
+"]" : positive rotation around x axis
+";" : negative rotation around y axis
+"'" : positive rotation around y axis
+"." : negative rotation around z axis
+"/" : positive rotation around z axis
+"=" : increase uniform scaling
+"-" : decrease uniform scaling
+
+NOTE : the following are with respect to the LOCAL object coordinate system
+
+"i" : negative rotation around local x axis
+"o" : positive rotation around local x axis
+"k" : negative rotation around local y axis
+"l" : positive rotation around local y axis
+"m" : negative rotation around local z axis
+"," : positive rotation around local z axis
+
+Other keyboard commands :
+
+"a" : toggle display of coordinate axes, should display world and local object coordinate axes
+"c" : snap camera to pointing at the world origin and pointing at the object at alternating order
+"p" : toggle between perspective and orthogonal projection (already in the template)
+"q" : exit program
+*/
 void keyboard(unsigned char key, int x, int y)
 {
 	printf("Key pressed %c\r\n", key);
 
     switch(key) {
+	//WORLD TRANSFORMS
+	//translation +,- | x,y,z
+	case '6':
+		translate_object(Matrix::translation(Coordinate::point3(0, 0, 0)));
+		break;
+	case '4':
+		translate_object(Matrix::translation(Coordinate::point3(0, 0, 0)));
+		break;
+	case '8':
+		translate_object(Matrix::translation(Coordinate::point3(0, 0, 0)));
+		break;
+	case '2':
+		translate_object(Matrix::translation(Coordinate::point3(0, 0, 0)));
+		break;
+	case '9':
+		translate_object(Matrix::translation(Coordinate::point3(0, 0, 0)));
+		break;
+	case '1':
+		break;
+	//rotation -,+ x,y,z
+	case '[':
+		rotate_local(Matrix::rotation_x(-1 * rotation_base_angle));
+		break;
+	case ']':
+		rotate_local(Matrix::rotation_x(rotation_base_angle));
+		break;
+	case ';':
+		rotate_local(Matrix::rotation_y(-1 * rotation_base_angle));
+		break;
+	case '\'':
+		rotate_local(Matrix::rotation_y(rotation_base_angle));
+		break;
+	case '.':
+		rotate_local(Matrix::rotation_z(-1 * rotation_base_angle));
+		break;
+	case '/':
+		rotate_local(Matrix::rotation_z(rotation_base_angle));
+		break;
+	//scaling +,-
+	case '=':
+		change_scale(1);
+		break;
+	case '-':
+		change_scale(-1);
+		break;
+
+	//MODEL TRANSFORMS
+	//rotation -,+ x,y,z
+	case 'i':
+	case 'I':
+		rotate_world(Matrix::rotation_x(-1 * rotation_base_angle));
+		break;
+	case 'o':
+	case 'O':
+		rotate_world(Matrix::rotation_x(rotation_base_angle));
+		break;
+	case 'k':
+	case 'K':
+		rotate_world(Matrix::rotation_y(-1 * rotation_base_angle));
+		break;
+	case 'l':
+	case 'L':
+		rotate_world(Matrix::rotation_y(rotation_base_angle));
+		break;
+	case 'm':
+	case 'M':
+		rotate_world(Matrix::rotation_z(-1 * rotation_base_angle));
+		break;
+	case ',':
+		rotate_world(Matrix::rotation_z(rotation_base_angle));
+		break;
+
+
+	//GENERAL CONTROL
+	//quit
     case 'q':
 	case 'Q':
 		exit(1);
@@ -455,13 +614,15 @@ void keyboard(unsigned char key, int x, int y)
 	// Toggle Projection Type (orthogonal, perspective)
 		toggleFlag(&PERSPECTIVE);
 		break;
+	//axes
 	case 'a':
 	case 'A':
 		toggleFlag(&SHOW_AXES);
 		break;
-	case 's':
-	case 'S':
-		toggleFlag(&SHOW_OBJECT);
+	//Camera look at world orign / look at model origin
+	case 'c':
+	case 'C':
+		set_camera_lookat();
 		break;
     default:
 		break;
@@ -477,7 +638,7 @@ int main(int argc, char* argv[])
     // Initialize GLUT
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
-    glutCreateWindow("Assignment 2 Template (orthogonal)");
+    glutCreateWindow("Assignment 3");
     glutDisplayFunc(display);
     glutReshapeFunc(resize);
     glutMouseFunc(mouseButton);
@@ -491,6 +652,15 @@ int main(int argc, char* argv[])
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
     glEnable(GL_DEPTH_TEST);
+
+	//Loade current transform settings
+	//scaling by 1 is the same as identity
+	model_rotation = Matrix::scale(1);
+	model_translation = Matrix::translation(Coordinate::point3(0, 0, 0));
+	world_rotation = Matrix::scale(1);
+	camera_position = Coordinate::point3_non_homogeneous(0, 0, -30);
+	up_vector = Coordinate::point3_non_homogeneous(0, 1, 0);
+	look_at = Coordinate::point3_non_homogeneous(0, 0, 0);
 
     // Switch to main loop
     glutMainLoop();
