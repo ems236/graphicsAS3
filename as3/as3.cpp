@@ -43,6 +43,10 @@ double scale = 1;
 Matrix model_translation;
 Matrix world_rotation;
 
+//Both of these apply scaling
+Matrix model_to_view;
+Matrix world_to_view;
+
 // Vertex and Face data structure used in the mesh reader
 // Feel free to change them
 typedef struct _point {
@@ -173,25 +177,7 @@ void meshReader (char *filename,int sign)
 }
 
 
-void draw_axes(Coordinate origin, Coordinate x, Coordinate y, Coordinate z)
-{
-	glBegin(GL_LINES);
-		//x
-		glColor3f(1, 0, 0);
-		glVertex3f(origin.x(), origin.y(), origin.z());
-		glVertex3f(x.x(), x.y(), x.z());
 
-		//y
-		glColor3f(0, 1, 0);
-		glVertex3f(origin.x(), origin.y(), origin.z());
-		glVertex3f(y.x(), y.y(), y.z());
-
-		//z
-		glColor3f(0, 0, 1);
-		glVertex3f(origin.x(), origin.y(), origin.z());
-		glVertex3f(z.x(), z.y(), z.z());
-	glEnd();
-}
 
 void draw_vertex(Coordinate& v)
 {
@@ -236,19 +222,54 @@ Matrix current_viewing_transform()
 	return Mvw;
 }
 
+void update_state()
+{
+	Matrix scale_matrix = Matrix::scale(scale);
+	Matrix current_viewing = current_viewing_transform();
+	model_to_view = current_viewing * world_rotation * model_translation * model_rotation * scale_matrix;
+	world_to_view = current_viewing * scale_matrix;
+
+	glutPostRedisplay();
+}
+
+Coordinate transform_point(Coordinate point)
+{
+	return model_to_view * point;
+}
+
 Coordinate transform_point(point* point)
 {
-	Coordinate coord = Matrix::scale(scale) * Coordinate::point3(point->x, point->y, point->z);
-	Coordinate model_transformed = model_rotation * coord;
-	Coordinate world_space = world_rotation * (model_translation * coord);
-	
-	return current_viewing_transform() * world_space;
+	return transform_point(Coordinate::point3(point->x, point->y, point->z));
+}
+
+Coordinate transform_world_point(Coordinate point)
+{
+	return world_to_view * point;
 }
 
 Coordinate transform_world_point(point* point)
 {
-	Coordinate coord = Matrix::scale(scale) * Coordinate::point3(point->x, point->y, point->z);
-	return current_viewing_transform() * coord;
+	return transform_world_point(Coordinate::point3(point->x, point->y, point->z));
+}
+
+void draw_axes(Coordinate origin, Coordinate x, Coordinate y, Coordinate z)
+{
+	glBegin(GL_LINES);
+	//x
+	glColor3f(1, 0, 0);
+	glVertex3f(origin.x(), origin.y(), origin.z());
+	glVertex3f(x.x(), x.y(), x.z());
+
+	//y
+	glColor3f(0, 1, 0);
+	glVertex3f(origin.x(), origin.y(), origin.z());
+	glVertex3f(y.x(), y.y(), y.z());
+
+	//z
+	glColor3f(0, 0, 1);
+	glVertex3f(origin.x(), origin.y(), origin.z());
+	glVertex3f(z.x(), z.y(), z.z());
+	glEnd();
 }
 
 void draw_object()
@@ -269,32 +290,6 @@ void draw_object()
 			draw_vertex(transform_point(&vertList[faceList[i].v3]));
 		}
 	glEnd();
-}
-
-float max(float a, float b)
-{
-	if (a > b)
-	{
-		return a;
-	}
-	else
-	{
-		return b;
-	}
-}
-
-float clamp(float min, float max, float value)
-{
-	if (value < min)
-	{
-		return min;
-	}
-	if (value > max)
-	{
-		return max;
-	}
-
-	return value;
 }
 
 // The display function. It is called whenever the window needs
@@ -327,7 +322,13 @@ void display(void)
 
 	if (SHOW_AXES)
 	{
-		//draw_axes();
+		Coordinate zero = Coordinate::point3(0, 0, 0);
+		Coordinate x = Coordinate::point3(1, 0, 0);
+		Coordinate y = Coordinate::point3(0, 1, 0);
+		Coordinate z = Coordinate::point3(0, 0, 1);
+
+		draw_axes(transform_point(zero), transform_point(x), transform_point(y), transform_point(z));
+		draw_axes(transform_world_point(zero), transform_world_point(x), transform_world_point(y), transform_world_point(z));
 	}
 
 	draw_object();
@@ -413,27 +414,30 @@ void mouseButton(int button,int state,int x,int y)
 // x and y are the location of the mouse (in window-relative coordinates)
 void mouseMotion(int x, int y)
 {
-	int x_change = x + MOUSE_LAST_X;
-	int y_change = y + MOUSE_LAST_Y;
+	int x_change = x - MOUSE_LAST_X;
+	int y_change = y - MOUSE_LAST_Y;
 
 	set_mouse_pos(x, y);
 
 	if (LEFT_MOUSE_DOWN)
 	{
 		//Change look at
-		glutPostRedisplay();
+		double xdiff = x_change * translation_base;
+		double ydiff = y_change * translation_base;
+		//look_at = Coordinate::point3_non_homogeneous(look_at.x() + xdiff, look_at.y() + ydiff, look_at.z());
+		update_state();
 	}
 
 	if (MIDDLE_MOUSE_DOWN)
 	{
 		//slide camera
-		glutPostRedisplay();
+		update_state();
 	}
 
 	if (RIGHT_MOUSE_DOWN)
 	{
 		//zoom
-		glutPostRedisplay();
+		update_state();
 	}
 	//printf("Mouse is at %d, %d\n", x,y);
 }
@@ -533,21 +537,22 @@ void keyboard(unsigned char key, int x, int y)
 	//WORLD TRANSFORMS
 	//translation +,- | x,y,z
 	case '6':
-		translate_object(Matrix::translation(Coordinate::point3(0, 0, 0)));
+		translate_object(Matrix::translation(Coordinate::point3(translation_base, 0, 0)));
 		break;
 	case '4':
-		translate_object(Matrix::translation(Coordinate::point3(0, 0, 0)));
+		translate_object(Matrix::translation(Coordinate::point3(-1 * translation_base, 0, 0)));
 		break;
 	case '8':
-		translate_object(Matrix::translation(Coordinate::point3(0, 0, 0)));
+		translate_object(Matrix::translation(Coordinate::point3(0, translation_base, 0)));
 		break;
 	case '2':
-		translate_object(Matrix::translation(Coordinate::point3(0, 0, 0)));
+		translate_object(Matrix::translation(Coordinate::point3(0, -1 * translation_base, 0)));
 		break;
 	case '9':
-		translate_object(Matrix::translation(Coordinate::point3(0, 0, 0)));
+		translate_object(Matrix::translation(Coordinate::point3(0, 0, translation_base)));
 		break;
 	case '1':
+		translate_object(Matrix::translation(Coordinate::point3(0, 0, -1 * translation_base)));
 		break;
 	//rotation -,+ x,y,z
 	case '[':
@@ -629,12 +634,16 @@ void keyboard(unsigned char key, int x, int y)
     }
 
     // Schedule a new display event
-    glutPostRedisplay();
+	update_state();
 }
 
 // Here's the main
 int main(int argc, char* argv[])
 {
+	//Initialize some empty transforms
+	model_to_view = Matrix::scale(1);
+	world_to_view = Matrix::scale(1);
+
     // Initialize GLUT
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH);
@@ -661,6 +670,8 @@ int main(int argc, char* argv[])
 	camera_position = Coordinate::point3_non_homogeneous(0, 0, -30);
 	up_vector = Coordinate::point3_non_homogeneous(0, 1, 0);
 	look_at = Coordinate::point3_non_homogeneous(0, 0, 0);
+
+	update_state();
 
     // Switch to main loop
     glutMainLoop();
