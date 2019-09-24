@@ -93,7 +93,10 @@ Coordinate Coordinate::normalized()
 		result.data.push_back(data.at(i) / rootSum);
 	}
 
-	result.homogenize(false);
+	if (is_homogeneous)
+	{
+		result.homogenize(data.back() == 1);
+	}
 
 	return result;
 }
@@ -117,7 +120,7 @@ double Coordinate::operator *(Coordinate& other)
 //Cross product
 Coordinate Coordinate::operator &(Coordinate& other)
 {
-	if (!(length() == 3 || (is_homogeneous && length() == 4)) || !(other.length() == 3 || (other.is_homogeneous && other.length() == 4)))
+	if (length() != 3 && other.length() != 3)
 	{
 		throw new exception("cross product only works for length 3");
 	}
@@ -134,5 +137,5 @@ Coordinate Coordinate::operator &(Coordinate& other)
 	double newy = x2 * z1 - x1 * z2;
 	double newz = x1 * y2 - x2 * y1;
 
-	return Coordinate::vector3(newx, newy, newz);
+	return Coordinate::point3_non_homogeneous(newx, newy, newz);
 }

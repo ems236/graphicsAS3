@@ -13,6 +13,7 @@
 #define OFF 0
 #define PI 3.14159265
 
+const double camera_rotation_base_angle = 0.005;
 const double rotation_base_angle = 0.3;
 const double translation_base = 0.5;
 const double scale_base = 0.2;
@@ -21,7 +22,7 @@ const double scale_base = 0.2;
 int window_width, window_height;    // Window dimensions
 
 //Current scene settings
-int PERSPECTIVE = OFF;
+int PERSPECTIVE = ON;
 int SHOW_AXES = ON;
 int NEXT_LOOKAT_IS_WORLD = ON;
 int LEFT_MOUSE_DOWN = OFF;
@@ -33,7 +34,7 @@ int OBJECT_HAS_LOADED = OFF;
 
 //current camera settings
 Coordinate camera_position;
-Coordinate look_at;
+Coordinate viewing_vector;
 Coordinate up_vector;
 
 //use these when swinging lookat around
@@ -182,30 +183,26 @@ void meshReader (char *filename,int sign)
 }
 
 
-
-
 void draw_vertex(Coordinate& v)
 {
 	glVertex3f(v.x(), v.y(), v.z());
 }
 
-//Gives z axis. Camera looks down negative z axis
-Coordinate current_viewing_vector()
-{
-	return Coordinate::vector3(
-		camera_position.x() - look_at.x()
-		, camera_position.y() - look_at.y()
-		, camera_position.z() - look_at.z()
-	).normalized();
-}
 
 Matrix current_viewing_transform()
 {
-	Coordinate n = current_viewing_vector();
+	Coordinate n = viewing_vector;
 
 	//& is cross product
 	Coordinate u = (up_vector & n).normalized();
 	Coordinate v = (n & u).normalized();
+
+	cout << "u\r\n";
+	u.print();
+	cout << "v\r\n";
+	v.print();
+	cout << "n\r\n";
+	n.print();
 
 	//get the inverse
 	Matrix Mvw = *new Matrix();
@@ -264,21 +261,30 @@ Coordinate transform_world_point(point* point)
 	return transform_world_point(Coordinate::point3(point->x, point->y, point->z));
 }
 
-void draw_axes(Coordinate origin, Coordinate x, Coordinate y, Coordinate z)
+
+int bool_to_int(bool value)
 {
+	return value ? 1 : 0;
+}
+
+void draw_axes(Coordinate origin, Coordinate x, Coordinate y, Coordinate z, bool use_primary_colors)
+{
+	int axis_value = bool_to_int(use_primary_colors);
+	int other_value = bool_to_int(!use_primary_colors);
+
 	glBegin(GL_LINES);
 	//x
-	glColor3f(1, 0, 0);
+	glColor3f(axis_value, other_value, other_value);
 	glVertex3f(origin.x(), origin.y(), origin.z());
 	glVertex3f(x.x(), x.y(), x.z());
 
 	//y
-	glColor3f(0, 1, 0);
+	glColor3f(other_value, axis_value, other_value);
 	glVertex3f(origin.x(), origin.y(), origin.z());
 	glVertex3f(y.x(), y.y(), y.z());
 
 	//z
-	glColor3f(0, 0, 1);
+	glColor3f(other_value, other_value, axis_value);
 	glVertex3f(origin.x(), origin.y(), origin.z());
 	glVertex3f(z.x(), z.y(), z.z());
 	glEnd();
@@ -339,8 +345,8 @@ void display(void)
 		Coordinate y = Coordinate::point3(0, 50, 0);
 		Coordinate z = Coordinate::point3(0, 0, 50);
 
-		draw_axes(transform_point(zero), transform_point(x), transform_point(y), transform_point(z));
-		draw_axes(transform_world_point(zero), transform_world_point(x), transform_world_point(y), transform_world_point(z));
+		draw_axes(transform_point(zero), transform_point(x), transform_point(y), transform_point(z), false);
+		draw_axes(transform_world_point(zero), transform_world_point(x), transform_world_point(y), transform_world_point(z), true);
 	}
 
 	draw_object();
@@ -381,7 +387,7 @@ int* getFlagByMouseType(int mouseType)
 	}
 	if (mouseType == MIDDLE)
 	{
-		return &LEFT_MOUSE_DOWN;
+		return &MIDDLE_MOUSE_DOWN;
 	}
 	if (mouseType == RIGHT)
 	{
@@ -422,22 +428,80 @@ void mouseButton(int button,int state,int x,int y)
 }
 
 
-//Move camera lookat.  Use spherical coordinates.
-void mouse_transform_lookat()
+void mouse_transform_viewing_axis(double x_change, double y_change)
 {
+	//Rotate viewing vector about it's x or y axis
+	//In camera space the viewing vector is 0,0,1
+	//camera -> world Mwv = [u v old-n]*new-n
+	//don't have to care about translations
+	const double rotation_step = 0.005;
+	double rotation_x = rotation_step * y_change;
+	double rotation_y = rotation_step * x_change;
+	Coordinate camera_z = Coordinate::vector3(0, 0, 1);
+	Coordinate new_z = Matrix::rotation_x(rotation_x) * Matrix::rotation_y(rotation_y) * camera_z;
+	new_z = new_z.normalized();
 
+	//remove homogenizing part 
+	new_z.data.pop_back();
+
+	Coordinate n = viewing_vector;
+
+	//& is cross product
+	Coordinate u = (up_vector & n).normalized();
+	Coordinate v = (n & u).normalized();
+
+	Matrix camera_to_world = *new Matrix();
+	camera_to_world.add(u);
+	camera_to_world.add(v);
+	camera_to_world.add(n);
+
+	//I'm pretty sure the 2 norm is always the same after doing this
+	viewing_vector = camera_to_world * new_z;
 }
 
 //Move the camera position along the plane perpendicular to its z axis
-void mouse_slide_camera_xy()
+//Don't change viewing axis, so update the lookat point
+void mouse_slide_camera_xy(double x_change, double y_change)
 {
+	Coordinate n = viewing_vector;
 
+	//& is cross product
+	Coordinate u = (up_vector & n).normalized();
+	Coordinate v = (n & u).normalized();
+
+	//double camera_x = camera_position.x();
+	//double camera_y = camera_position.y();
+	//double camera_z = camera_position.z();
+
+	const double scale_rate = 0.05;
+	double camera_x = scale_rate * x_change * u.x();
+	double camera_y = scale_rate * x_change * u.y();
+	double camera_z = scale_rate * x_change * u.z();
+
+	camera_x += scale_rate * y_change * v.x();
+	camera_y += scale_rate * y_change * v.y();
+	camera_z += scale_rate * y_change * v.z();
+
+	camera_position = Coordinate::point3_non_homogeneous(camera_position.x() + camera_x, camera_position.y() + camera_y, camera_position.z() + camera_z);
+	//look_at = Coordinate::point3_non_homogeneous(look_at.x() + camera_x, look_at.y() + camera_y, look_at.z() + camera_z);
 }
 
 //Move camera along its z axis
-void mouse_slide_camera_z()
+void mouse_slide_camera_z(double y_change)
 {
+	Coordinate n = viewing_vector;
+	
+	//moving up moves it closer to its lookat even though that's the negative z axis
+	double camera_x = camera_position.x();
+	double camera_y = camera_position.y();
+	double camera_z = camera_position.z();
 
+	const double scale_rate = -0.05;
+	camera_x += scale_rate * y_change * n.x();
+	camera_y += scale_rate * y_change * n.y();
+	camera_z += scale_rate * y_change * n.z();
+
+	camera_position = Coordinate::point3_non_homogeneous(camera_x, camera_y, camera_z);
 }
 
 //This function is called whenever the mouse is moved with a mouse button held down.
@@ -450,16 +514,14 @@ void mouseMotion(int x, int y)
 	set_mouse_pos(x, y);
 
 	if (LEFT_MOUSE_DOWN)
-	{
-		//Change look at
-		double xdiff = x_change * translation_base;
-		double ydiff = y_change * translation_base;
-		//look_at = Coordinate::point3_non_homogeneous(look_at.x() + xdiff, look_at.y() + ydiff, look_at.z());
+	{	
+		mouse_transform_viewing_axis(x_change, y_change);
 		update_state();
 	}
 
 	if (MIDDLE_MOUSE_DOWN)
 	{
+		mouse_slide_camera_xy(x_change, y_change);
 		//slide camera
 		update_state();
 	}
@@ -467,6 +529,7 @@ void mouseMotion(int x, int y)
 	if (RIGHT_MOUSE_DOWN)
 	{
 		//zoom
+		mouse_slide_camera_z(y_change);
 		update_state();
 	}
 	//printf("Mouse is at %d, %d\n", x,y);
@@ -483,6 +546,31 @@ void toggleFlag(int* flag)
 	{
 		*flag = ON;
 	}
+}
+
+//Gives z axis. Camera looks down negative z axis
+void update_viewing_vector(Coordinate look_at)
+{
+	viewing_vector = Coordinate::vector3(
+		camera_position.x() - look_at.x()
+		, camera_position.y() - look_at.y()
+		, camera_position.z() - look_at.z()
+	).normalized();
+}
+
+void set_camera_lookat()
+{
+	Coordinate zero = Coordinate::point3(0, 0, 0);
+	if (NEXT_LOOKAT_IS_WORLD)
+	{
+		update_viewing_vector(zero);
+	}
+	else
+	{
+		update_viewing_vector(model_translation * zero);
+	}
+
+	toggleFlag(&NEXT_LOOKAT_IS_WORLD);
 }
 
 void rotate_local(Matrix new_rotation)
@@ -506,21 +594,6 @@ void translate_object(Matrix new_translation)
 void change_scale(int sign)
 {
 	scale = scale + scale_base * sign;
-}
-
-void set_camera_lookat()
-{
-	Coordinate zero = Coordinate::point3(0, 0, 0);
-	if (NEXT_LOOKAT_IS_WORLD)
-	{
-		look_at = zero;
-	}
-	else
-	{
-		look_at = model_translation * zero;
-	}
-
-	toggleFlag(&NEXT_LOOKAT_IS_WORLD);
 }
 
 // This function is called whenever there is a keyboard input
@@ -699,7 +772,7 @@ int main(int argc, char* argv[])
 	world_rotation = Matrix::scale(1);
 	camera_position = Coordinate::point3_non_homogeneous(0, 0, -30);
 	up_vector = Coordinate::point3_non_homogeneous(0, 1, 0);
-	look_at = Coordinate::point3_non_homogeneous(0, 0, 0);
+	viewing_vector = Coordinate::point3_non_homogeneous(0, 0, -1);
 
 	update_state();
 
