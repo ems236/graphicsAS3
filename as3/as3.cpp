@@ -227,10 +227,10 @@ Matrix current_viewing_transform()
 void update_state()
 {
 	Matrix scale_matrix = Matrix::scale(scale);
-	Matrix model_to_world = world_rotation * model_translation * model_rotation * scale_matrix;
+	Matrix model_to_world = world_rotation * model_translation * scale_matrix * model_rotation;
 	Matrix current_viewing = current_viewing_transform();
-	model_to_view = current_viewing * world_rotation * model_translation * model_rotation * scale_matrix;
-	world_to_view = current_viewing * scale_matrix;
+	model_to_view = current_viewing * model_to_world;
+	world_to_view = current_viewing;
 
 	cout << "Model -> world transforms\r\n";
 	model_to_world.print();
@@ -551,7 +551,7 @@ void toggleFlag(int* flag)
 //Gives z axis. Camera looks down negative z axis
 void update_viewing_vector(Coordinate look_at)
 {
-	viewing_vector = Coordinate::vector3(
+	viewing_vector = Coordinate::point3_non_homogeneous(
 		camera_position.x() - look_at.x()
 		, camera_position.y() - look_at.y()
 		, camera_position.z() - look_at.z()
