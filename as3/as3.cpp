@@ -41,15 +41,7 @@ Coordinate up_vector;
 double current_theta = 0;
 double current_phi = 0;
 
-//Local transforms
-Matrix model_rotation;
-double scale = 1;
-
-//world transforms
-Matrix model_translation;
-Matrix world_rotation;
-
-//Both of these apply scaling
+Matrix model_to_world;
 Matrix model_to_view;
 Matrix world_to_view;
 
@@ -226,8 +218,8 @@ Matrix current_viewing_transform()
 
 void update_state()
 {
-	Matrix scale_matrix = Matrix::scale(scale);
-	Matrix model_to_world = world_rotation * model_translation * scale_matrix * model_rotation;
+	//Matrix scale_matrix = Matrix::scale(scale);
+	//Matrix model_to_world = world_rotation * model_translation * scale_matrix * model_rotation;
 	Matrix current_viewing = current_viewing_transform();
 	model_to_view = current_viewing * model_to_world;
 	world_to_view = current_viewing;
@@ -236,7 +228,6 @@ void update_state()
 	model_to_world.print();
 	cout << "World -> view transforms\r\n";
 	world_to_view.print();
-
 
 	glutPostRedisplay();
 }
@@ -567,7 +558,7 @@ void set_camera_lookat()
 	}
 	else
 	{
-		update_viewing_vector(model_translation * zero);
+		update_viewing_vector(model_to_world * zero);
 	}
 
 	toggleFlag(&NEXT_LOOKAT_IS_WORLD);
@@ -576,24 +567,25 @@ void set_camera_lookat()
 void rotate_local(Matrix new_rotation)
 {
 	//Local multiply on right
-	model_rotation = model_rotation * new_rotation;
+	model_to_world = model_to_world * new_rotation;
 }
 
 void rotate_world(Matrix new_rotation)
 {
 	//world rotation multiply on left;
-	world_rotation = new_rotation * world_rotation;
+	model_to_world = new_rotation * model_to_world;
 }
 
 void translate_object(Matrix new_translation)
 {
 	//multiply a new translation on left
-	model_translation = new_translation * model_translation;
+	model_to_world = new_translation * model_to_world;
 }
 
 void change_scale(int sign)
 {
-	scale = scale + scale_base * sign;
+	double scale = scale_base * sign;
+	model_to_world = Matrix::scale(scale) * model_to_world;
 }
 
 // This function is called whenever there is a keyboard input
@@ -767,9 +759,7 @@ int main(int argc, char* argv[])
 
 	//Loade current transform settings
 	//scaling by 1 is the same as identity
-	model_rotation = Matrix::scale(1);
-	model_translation = Matrix::translation(Coordinate::point3(0, 0, 0));
-	world_rotation = Matrix::scale(1);
+	model_to_world = Matrix::scale(1);
 	camera_position = Coordinate::point3_non_homogeneous(0, 0, -30);
 	up_vector = Coordinate::point3_non_homogeneous(0, 1, 0);
 	viewing_vector = Coordinate::point3_non_homogeneous(0, 0, -1);
