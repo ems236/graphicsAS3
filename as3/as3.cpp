@@ -584,7 +584,7 @@ void translate_object(Matrix new_translation)
 
 void change_scale(int sign)
 {
-	double scale = scale_base * sign;
+	double scale = 1.0 + scale_base * sign;
 	model_to_world = Matrix::scale(scale) * model_to_world;
 }
 
